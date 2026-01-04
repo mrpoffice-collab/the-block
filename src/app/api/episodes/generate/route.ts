@@ -4,7 +4,7 @@ import { getLocalData } from '@/lib/local-data'
 import { generateScript, generateEpisodeTitle } from '@/lib/script-generator'
 import { generateAndUploadAudio } from '@/lib/tts'
 
-export const maxDuration = 60
+export const maxDuration = 10
 
 export async function POST(request: Request) {
   try {
@@ -27,15 +27,15 @@ export async function POST(request: Request) {
     })
 
     try {
-      // Step 1: Fetch local data
+      // Step 1: Fetch local data (fast - parallel fetches)
       console.log('Fetching local data for:', location)
       const localData = await getLocalData(location)
 
-      // Step 2: Generate script
+      // Step 2: Generate script (Haiku = fast)
       console.log('Generating script...')
       const script = await generateScript(localData, location, topics, neighborhoodName)
 
-      // Step 3: Generate audio
+      // Step 3: Generate audio (all lines in parallel)
       console.log('Generating audio...')
       const { url, duration } = await generateAndUploadAudio(script, episode.id)
 

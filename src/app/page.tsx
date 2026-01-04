@@ -7,9 +7,28 @@ interface Episode {
   title: string
   date: string
   location: string
+  script: string | null
   audioUrl: string | null
   duration: number | null
-  topics: string[] | null
+}
+
+interface DialogueLine {
+  speaker: 'MESCHELLE' | 'KIM'
+  text: string
+}
+
+function parseScript(script: string): DialogueLine[] {
+  const lines: DialogueLine[] = []
+  const regex = /^(MESCHELLE|KIM):\s*(.+)$/gm
+
+  let match
+  while ((match = regex.exec(script)) !== null) {
+    const speaker = match[1] as 'MESCHELLE' | 'KIM'
+    const text = match[2].trim()
+    lines.push({ speaker, text })
+  }
+
+  return lines
 }
 
 export default function Home() {
@@ -17,19 +36,23 @@ export default function Home() {
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [progress, setProgress] = useState(0)
-
-  // Form state
-  const [location, setLocation] = useState('')
-  const [topicInput, setTopicInput] = useState('')
-  const [topics, setTopics] = useState<string[]>([])
+  const [dialogueLines, setDialogueLines] = useState<DialogueLine[]>([])
+  const [audioProgress, setAudioProgress] = useState(0)
 
   const audioRef = useRef<HTMLAudioElement>(null)
 
   useEffect(() => {
     fetchEpisodes()
   }, [])
+
+  useEffect(() => {
+    if (currentEpisode?.script) {
+      const lines = parseScript(currentEpisode.script)
+      setDialogueLines(lines)
+    } else {
+      setDialogueLines([])
+    }
+  }, [currentEpisode])
 
   async function fetchEpisodes() {
     try {
@@ -46,71 +69,36 @@ export default function Home() {
     }
   }
 
-  function addTopic() {
-    if (topicInput.trim() && topics.length < 5) {
-      setTopics([...topics, topicInput.trim()])
-      setTopicInput('')
+  function selectEpisode(episode: Episode) {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
     }
-  }
-
-  function removeTopic(index: number) {
-    setTopics(topics.filter((_, i) => i !== index))
-  }
-
-  async function generateEpisode() {
-    if (!location.trim()) {
-      alert('Please enter a location')
-      return
-    }
-
-    setIsGenerating(true)
-    try {
-      const res = await fetch('/api/episodes/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ location, topics }),
-      })
-      const data = await res.json()
-      if (data.success || data.episode) {
-        setTopics([])
-        await fetchEpisodes()
-      } else {
-        alert('Failed to generate: ' + (data.error || 'Unknown error'))
-      }
-    } catch (error) {
-      console.error('Failed to generate:', error)
-      alert('Failed to generate episode')
-    } finally {
-      setIsGenerating(false)
-    }
-  }
-
-  function playEpisode(episode: Episode) {
+    setIsPlaying(false)
     setCurrentEpisode(episode)
-    setIsPlaying(true)
-    setTimeout(() => audioRef.current?.play(), 100)
+    setAudioProgress(0)
   }
 
   function togglePlay() {
-    if (audioRef.current) {
+    if (currentEpisode?.audioUrl && audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause()
+        setIsPlaying(false)
       } else {
         audioRef.current.play()
+        setIsPlaying(true)
       }
-      setIsPlaying(!isPlaying)
     }
   }
 
-  function handleTimeUpdate() {
-    if (audioRef.current) {
-      const pct = (audioRef.current.currentTime / audioRef.current.duration) * 100
-      setProgress(pct || 0)
+  function handleAudioTimeUpdate() {
+    if (audioRef.current && audioRef.current.duration) {
+      setAudioProgress((audioRef.current.currentTime / audioRef.current.duration) * 100)
     }
   }
 
-  function handleSeek(e: React.MouseEvent<HTMLDivElement>) {
-    if (audioRef.current) {
+  function handleAudioSeek(e: React.MouseEvent<HTMLDivElement>) {
+    if (audioRef.current && audioRef.current.duration) {
       const rect = e.currentTarget.getBoundingClientRect()
       const pct = (e.clientX - rect.left) / rect.width
       audioRef.current.currentTime = pct * audioRef.current.duration
@@ -138,99 +126,17 @@ export default function Home() {
       <header className="border-b border-amber-200 bg-white/50 backdrop-blur-sm">
         <div className="mx-auto max-w-4xl px-4 py-6">
           <h1 className="text-3xl font-bold tracking-tight text-amber-900">The Block</h1>
-          <p className="text-amber-700">Your neighborhood, but make it funny</p>
+          <p className="text-amber-700">Two friends, one neighborhood, infinite gossip</p>
         </div>
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-8">
-        {/* Generator Form */}
-        <div className="mb-8 rounded-xl bg-white p-6 shadow-lg border border-amber-200">
-          <h2 className="text-lg font-semibold text-amber-900 mb-4">Create Today&apos;s Episode</h2>
-
-          {/* Location */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Your Location
-            </label>
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g., Austin, TX or 90210"
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-            />
-          </div>
-
-          {/* Topics */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              What&apos;s happening in the neighborhood? (optional)
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={topicInput}
-                onChange={(e) => setTopicInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addTopic()}
-                placeholder="e.g., Gary's inflatable snowman, new taco truck"
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
-              />
-              <button
-                onClick={addTopic}
-                disabled={topics.length >= 5}
-                className="rounded-lg bg-amber-100 px-4 py-2 text-amber-800 hover:bg-amber-200 disabled:opacity-50"
-              >
-                Add
-              </button>
-            </div>
-
-            {/* Topic Pills */}
-            {topics.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {topics.map((topic, i) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800"
-                  >
-                    {topic}
-                    <button
-                      onClick={() => removeTopic(i)}
-                      className="ml-1 text-amber-600 hover:text-amber-900"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Generate Button */}
-          <button
-            onClick={generateEpisode}
-            disabled={isGenerating || !location.trim()}
-            className="w-full rounded-lg bg-amber-600 py-3 font-semibold text-white transition hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isGenerating ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Maria & Tina are recording...
-              </span>
-            ) : (
-              '🎙️ Generate Episode'
-            )}
-          </button>
-        </div>
-
         {/* Current Player */}
-        {currentEpisode && (
+        {currentEpisode ? (
           <div className="mb-8 rounded-xl bg-white p-6 shadow-lg border border-amber-200">
             <div className="mb-4">
               <h2 className="text-xl font-semibold text-amber-900">{currentEpisode.title}</h2>
-              <p className="text-sm text-amber-700">{currentEpisode.location}</p>
+              <p className="text-sm text-amber-700">{currentEpisode.location} • {formatDate(currentEpisode.date)}</p>
             </div>
 
             {currentEpisode.audioUrl ? (
@@ -238,23 +144,25 @@ export default function Home() {
                 <audio
                   ref={audioRef}
                   src={currentEpisode.audioUrl}
-                  onTimeUpdate={handleTimeUpdate}
+                  onTimeUpdate={handleAudioTimeUpdate}
                   onEnded={() => setIsPlaying(false)}
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => setIsPlaying(false)}
                 />
 
+                {/* Progress bar */}
                 <div
                   className="mb-4 h-2 cursor-pointer rounded-full bg-amber-100"
-                  onClick={handleSeek}
+                  onClick={handleAudioSeek}
                 >
                   <div
                     className="h-full rounded-full bg-amber-500 transition-all"
-                    style={{ width: `${progress}%` }}
+                    style={{ width: `${audioProgress}%` }}
                   />
                 </div>
 
-                <div className="flex items-center gap-4">
+                {/* Play Controls */}
+                <div className="flex items-center gap-4 mb-4">
                   <button
                     onClick={togglePlay}
                     className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-600 text-white transition hover:bg-amber-500"
@@ -270,31 +178,49 @@ export default function Home() {
                     )}
                   </button>
                   <div className="text-sm text-amber-700">
-                    Duration: {formatDuration(currentEpisode.duration)}
+                    {formatDuration(currentEpisode.duration)}
                   </div>
                 </div>
               </>
             ) : (
-              <p className="text-gray-500 italic">Audio not available</p>
+              <p className="text-amber-600 italic mb-4">Audio generating...</p>
+            )}
+
+            {/* Script Display */}
+            {dialogueLines.length > 0 && (
+              <div className="max-h-64 overflow-y-auto rounded-lg bg-amber-50 p-4 space-y-2">
+                {dialogueLines.map((line, i) => (
+                  <div key={i} className="p-2 rounded">
+                    <span className={`font-bold ${line.speaker === 'MESCHELLE' ? 'text-rose-700' : 'text-violet-700'}`}>
+                      {line.speaker}:
+                    </span>{' '}
+                    <span className="text-gray-800">{line.text}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-        )}
+        ) : !isLoading ? (
+          <div className="mb-8 rounded-xl bg-white p-8 shadow-lg border border-amber-200 text-center">
+            <p className="text-amber-700 text-lg">No episodes yet. Check back soon!</p>
+          </div>
+        ) : null}
 
         {/* Episodes List */}
         <div>
-          <h3 className="mb-4 text-lg font-semibold text-amber-900">Recent Episodes</h3>
+          <h3 className="mb-4 text-lg font-semibold text-amber-900">All Episodes</h3>
           {isLoading ? (
             <div className="text-center py-8 text-amber-700">Loading episodes...</div>
           ) : episodes.length === 0 ? (
             <div className="text-center py-8 text-amber-700">
-              No episodes yet. Create your first one above!
+              No episodes available yet.
             </div>
           ) : (
             <div className="space-y-2">
               {episodes.map((episode) => (
                 <div
                   key={episode.id}
-                  onClick={() => playEpisode(episode)}
+                  onClick={() => selectEpisode(episode)}
                   className={`flex cursor-pointer items-center justify-between rounded-lg p-4 transition ${
                     currentEpisode?.id === episode.id
                       ? 'bg-amber-100 border-2 border-amber-400'
@@ -334,7 +260,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-amber-200 py-6 text-center text-sm text-amber-700">
-        <p>The Block - Two friends, one neighborhood, infinite gossip</p>
+        <p>The Block - New episodes daily at 6 AM</p>
       </footer>
     </div>
   )

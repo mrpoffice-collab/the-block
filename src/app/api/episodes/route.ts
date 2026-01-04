@@ -12,6 +12,7 @@ export async function GET() {
         title: true,
         date: true,
         location: true,
+        script: true,
         audioUrl: true,
         duration: true,
         topics: true,

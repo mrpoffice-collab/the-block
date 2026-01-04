@@ -8,11 +8,11 @@ function getClient() {
 const SYSTEM_PROMPT = `You are a comedy writer creating a script for a neighborhood podcast called "The Block."
 
 THE HOSTS:
-- MARIA: Quick-witted, slightly sarcastic, asks the follow-up questions everyone is thinking
-- TINA: Warm, gossipy, knows everyone's business, easily amused
+- MESCHELLE: Quick-witted, playful humor, asks the follow-up questions everyone is thinking
+- KIM: Quick-witted, warm, knows everyone's business, finds joy in the absurdity of everyday life
 
 THE FORMAT:
-This is two best friends having coffee/wine and catching up on neighborhood happenings. They've lived here for years and know all the characters.
+This is two best friends having coffee/wine and catching up on neighborhood happenings. They've lived here for years and know all the characters. Both have sharp, playful humor - they riff off each other naturally.
 
 CRITICAL RULES:
 1. Write as natural dialogue - contractions, interruptions, trailing off...
@@ -25,23 +25,23 @@ CRITICAL RULES:
 8. End with a callback or running joke
 
 DIALOGUE FORMAT:
-Each line must start with "MARIA:" or "TINA:"
+Each line must start with "MESCHELLE:" or "KIM:"
 Put reactions in asterisks: *laughing*, *snorts*, *sighs*
 
 EXAMPLE:
-MARIA: Okay so I saw Gary out there at 6 AM again. With the ruler.
-TINA: *laughing* No. Measuring his grass?
-MARIA: Measuring. His. Grass. In January.
-TINA: That man has issues and I respect it honestly.
-MARIA: *snorts* The dedication is unmatched. Anyway, did you see the thing about the new stop sign?
-TINA: Oh my god, the Facebook comments on that were WILD.
+MESCHELLE: Okay so I saw Gary out there at 6 AM again. With the ruler.
+KIM: *laughing* No. Measuring his grass?
+MESCHELLE: Measuring. His. Grass. In January.
+KIM: That man has issues and I respect it honestly.
+MESCHELLE: *snorts* The dedication is unmatched. Anyway, did you see the thing about the new stop sign?
+KIM: Oh my god, the Facebook comments on that were WILD.
 
-TARGET LENGTH: About 3-4 minutes when spoken (roughly 450-600 words)
+TARGET LENGTH: EXACTLY 8-10 lines of dialogue total. About 45-60 seconds when spoken. Be CONCISE.
 
 Remember: If there's no laughter, it doesn't work. These women genuinely enjoy each other and find their neighborhood hilarious.`
 
 export interface DialogueLine {
-  speaker: 'MARIA' | 'TINA'
+  speaker: 'MESCHELLE' | 'KIM'
   text: string
   hasReaction: boolean
 }
@@ -61,8 +61,8 @@ export async function generateScript(
   })
 
   const response = await getClient().messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 2000,
+    model: 'claude-3-5-haiku-20241022',
+    max_tokens: 800,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -98,11 +98,11 @@ Remember:
 
 export function parseScript(script: string): DialogueLine[] {
   const lines: DialogueLine[] = []
-  const regex = /^(MARIA|TINA):\s*(.+)$/gm
+  const regex = /^(MESCHELLE|KIM):\s*(.+)$/gm
 
   let match
   while ((match = regex.exec(script)) !== null) {
-    const speaker = match[1] as 'MARIA' | 'TINA'
+    const speaker = match[1] as 'MESCHELLE' | 'KIM'
     const text = match[2].trim()
     const hasReaction = /\*[^*]+\*/.test(text)
 

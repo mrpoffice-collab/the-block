@@ -1,0 +1,72 @@
+name: Generate Daily Episode
+
+on:
+  # Run daily at 6 AM Central (12 PM UTC)
+  schedule:
+    - cron: '0 12 * * *'
+
+  # Allow manual trigger with custom inputs
+  workflow_dispatch:
+    inputs:
+      location:
+        description: 'Location (city, state)'
+        required: false
+        default: 'Austin, TX'
+      topics:
+        description: 'Topics (comma-separated)'
+        required: false
+        default: ''
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run episode generator
+        env:
+          # API Keys
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+
+          # Database
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+          # Optional
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+        run: |
+          # Parse inputs
+          LOCATION="${{ github.event.inputs.location || 'Austin, TX' }}"
+          TOPICS="${{ github.event.inputs.topics || '' }}"
+
+          # Convert comma-separated topics to arguments
+          if [ -n "$TOPICS" ]; then
+            IFS=',' read -ra TOPIC_ARRAY <<< "$TOPICS"
+            npx tsx scripts/generate-episode.ts "$LOCATION" "${TOPIC_ARRAY[@]}"
+          else
+            npx tsx scripts/generate-episode.ts "$LOCATION"
+          fi
+
+      - name: Report success
+        if: success()
+        run: echo "Episode generated successfully!"
+
+      - name: Report failure
+        if: failure()
+        run: echo "Episode generation failed. Check logs for details."

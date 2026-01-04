@@ -8,15 +8,18 @@ function getOpenAI() {
 
 // Voice assignments
 const VOICES = {
-  MARIA: 'nova' as const,   // Friendly, upbeat - the quick-witted one
-  TINA: 'shimmer' as const, // Soft, warm - the gossipy one
+  MESCHELLE: 'nova' as const,   // Friendly, upbeat - quick-witted and playful
+  KIM: 'shimmer' as const,      // Warm, expressive - quick-witted and joyful
 }
 
 export async function synthesizeDialogue(script: string): Promise<Buffer[]> {
   const lines = parseScript(script)
-  const audioBuffers: Buffer[] = []
 
-  for (const line of lines) {
+  // Prepare all lines with their voices
+  const lineData: { text: string; voice: 'nova' | 'shimmer'; index: number }[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
     // Clean the text - remove reaction markers for TTS but keep natural speech
     let text = line.text
       .replace(/\*laughing\*/gi, 'ha ha!')
@@ -29,11 +32,20 @@ export async function synthesizeDialogue(script: string): Promise<Buffer[]> {
     if (!text) continue
 
     const voice = VOICES[line.speaker]
-    const buffer = await synthesizeLine(text, voice)
-    audioBuffers.push(buffer)
+    lineData.push({ text, voice, index: i })
   }
 
-  return audioBuffers
+  // Process ALL in parallel (only 8-10 lines, should be fine)
+  const results = await Promise.all(
+    lineData.map(async ({ text, voice, index }) => {
+      const buffer = await synthesizeLine(text, voice)
+      return { index, buffer }
+    })
+  )
+
+  // Sort by original index and extract buffers
+  results.sort((a, b) => a.index - b.index)
+  return results.map(r => r.buffer)
 }
 
 async function synthesizeLine(
@@ -42,7 +54,7 @@ async function synthesizeLine(
 ): Promise<Buffer> {
   const openai = getOpenAI()
   const response = await openai.audio.speech.create({
-    model: 'tts-1-hd',
+    model: 'tts-1',
     voice,
     input: text,
     response_format: 'mp3',
