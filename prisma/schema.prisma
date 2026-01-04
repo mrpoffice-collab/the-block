@@ -1,0 +1,26 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Episode {
+  id          String   @id @default(cuid())
+  title       String
+  date        DateTime @default(now())
+  location    String
+  audioUrl    String?
+  script      String   @db.Text
+  duration    Int?
+  topics      Json?
+  localData   Json?
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([date])
+  @@index([location])
+}
